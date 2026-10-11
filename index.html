@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LAST GUARDIAN</title>
+    <style>
+        /* 画面中央に黒いゲーム画面を配置するためのCSS */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #111;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 8bit/16bit風のゲーム画面（800x600） */
+        #gameCanvas {
+            background-color: #050510;
+            border: 4px solid #444;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+
+<!-- ゲームを描画するためのHTML5 Canvas -->
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<script>
+    // C言語の main() 関数の準備段階のようなものです。
+    // ブラウザがHTMLの読み込みを完了したら実行されます。
+    window.onload = function() {
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 動作確認用のテキスト描画
+        ctx.fillStyle = '#00ffcc';
+        ctx.font = '20px Courier New';
+        ctx.fillText('LAST GUARDIAN - System Ready', 50, 50);
+    };
+</script>
+</body>
+</html>
