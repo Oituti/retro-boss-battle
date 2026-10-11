@@ -39,6 +39,7 @@
         left: false,
         right: false,
         jump: false,
+        jumpPressed: false,
         shoot: false
     };
 
@@ -51,38 +52,73 @@
         speed: 5,
         vy: 0,
         gravity: 0.8,
-        jumpPower: -13,
+        jumpPower: -12,
         isGrounded: false,
-        facing: 'right',   // 向いている方向 ('left' または 'right')
-        shootCooldown: 0   // 連続発射を防止するためのクールダウンタイマー
+        jumpsLeft: 2,
+        facing: 'right',
+        shootCooldown: 0
     };
 
-    // プレイヤーの弾を保持する配列（C言語の構造体配列のようなもの）
-    const bullets = [];
+    // --- ボスのデータ構造 ---
+    const boss = {
+        x: 600,
+        y: 300,
+        width: 140,
+        height: 200,
+        maxHp: 30,
+        hp: 30,
+        coreOpen: false,
+        coreTimer: 0,
+        coreOpenDuration: 120,
+        coreCloseDuration: 180,
+        flashTimer: 0,
+        // 攻撃システム関連
+        attackTimer: 0,
+        attackInterval: 200,  // 攻撃間隔（フレーム）
+        warningTimer: 0,     // 予兆タイマー
+        warningDuration: 48, // 予兆時間（約0.8秒 = 48フレーム）
+        nextAttackType: 0    // 次の攻撃の種類 (1:狙い撃ち, 2:衝撃波, 3:拡散)
+    };
 
-    // --- キーボードイベントリスナー ---
+    const bullets = [];     // プレイヤーの弾
+    const bossBullets = []; // ボスの弾・衝撃波
+
+    function checkCollision(rect1, rect2) {
+        return (
+            rect1.x < rect2.x + rect2.width &&
+            rect1.x + rect1.width > rect2.x &&
+            rect1.y < rect2.y + rect2.height &&
+            rect1.y + rect1.height > rect2.y
+        );
+    }
+
+    // --- キーボードイベント ---
     window.addEventListener('keydown', (e) => {
         if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft')  keys.left = true;
         if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.right = true;
-        if (e.key === ' ' || e.key === 'ArrowUp')                    keys.jump = true;
+        if (e.key === ' ' || e.key === 'ArrowUp') {
+            if (!keys.jump) keys.jumpPressed = true;
+            keys.jump = true;
+        }
         if (e.key === 'j' || e.key === 'J' || e.key === 'x' || e.key === 'X') keys.shoot = true;
     });
 
     window.addEventListener('keyup', (e) => {
         if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft')  keys.left = false;
         if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.right = false;
-        if (e.key === ' ' || e.key === 'ArrowUp')                    keys.jump = false;
+        if (e.key === ' ' || e.key === 'ArrowUp') {
+            keys.jump = false;
+            keys.jumpPressed = false;
+        }
         if (e.key === 'j' || e.key === 'J' || e.key === 'x' || e.key === 'X') keys.shoot = false;
     });
 
-    // --- 弾を生成する関数 ---
     function shootBullet() {
-        if (player.shootCooldown > 0) return; // クールダウン中なら撃てない
+        if (player.shootCooldown > 0) return;
 
-        // 弾の初期位置と速度の設定
         const bulletSpeed = 12;
         const bx = player.facing === 'right' ? player.x + player.width : player.x - 12;
-        const by = player.y + player.height / 2 - 4; // プレイヤーの中央の高さ
+        const by = player.y + player.height / 2 - 4;
 
         bullets.push({
             x: bx,
@@ -90,16 +126,66 @@
             width: 12,
             height: 8,
             vx: player.facing === 'right' ? bulletSpeed : -bulletSpeed,
-            color: '#ffff00' // レトロな黄色エネルギー弾
+            color: '#ffff00'
         });
 
-        // クールダウン設定（フレーム数。60fpsなので12フレーム ≒ 約0.2秒間隔）
         player.shootCooldown = 12;
+    }
+
+    // --- ボスの攻撃実行関数 ---
+    function executeBossAttack(type) {
+        const bx = boss.x;
+        const by = boss.y + 100;
+
+        if (type === 1) {
+            // 【パターン1】プレイヤーの位置を狙うエネルギー弾（三角関数で角度計算）
+            const dx = (player.x + player.width / 2) - bx;
+            const dy = (player.y + player.height / 2) - by;
+            const angle = Math.atan2(dy, dx);
+            const speed = 7;
+
+            bossBullets.push({
+                x: bx,
+                y: by,
+                width: 16,
+                height: 16,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                color: '#ff00ff' // 紫の追尾型エネルギー弾
+            });
+        } else if (type === 2) {
+            // 【パターン2】ジャンプで回避可能な地上の衝撃波
+            bossBullets.push({
+                x: boss.x,
+                y: GROUND_Y + player.height - 30, // 床すれすれ
+                width: 40,
+                height: 30,
+                vx: -6, // 左へ進む
+                vy: 0,
+                color: '#ff3300' // 赤い衝撃波
+            });
+        } else if (type === 3) {
+            // 【パターン3】複数方向に飛ぶ拡散弾 (3方向)
+            const angles = [-0.4, 0, 0.4]; // やや上・正面・やや下
+            angles.forEach(offsetAngle => {
+                const angle = Math.PI + offsetAngle; // 左方向(180度)ベース
+                const speed = 6;
+                bossBullets.push({
+                    x: bx,
+                    y: by,
+                    width: 14,
+                    height: 14,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    color: '#00ffff' // 水色の拡散弾
+                });
+            });
+        }
     }
 
     // --- ゲームの更新処理 ---
     function update() {
-        // 1. 左右移動と向きの更新
+        // 1. プレイヤー処理
         if (keys.left) {
             player.x -= player.speed;
             player.facing = 'left';
@@ -114,13 +200,13 @@
             player.x = canvas.width - player.width;
         }
 
-        // 2. ジャンプ処理
-        if (keys.jump && player.isGrounded) {
+        if (keys.jumpPressed && player.jumpsLeft > 0) {
             player.vy = player.jumpPower;
+            player.jumpsLeft--;
             player.isGrounded = false;
+            keys.jumpPressed = false;
         }
 
-        // 3. 重力とY座標更新
         player.vy += player.gravity;
         player.y += player.vy;
 
@@ -128,24 +214,80 @@
             player.y = GROUND_Y;
             player.vy = 0;
             player.isGrounded = true;
+            player.jumpsLeft = 2;
         }
 
-        // 4. 射撃タイマーと弾生成
-        if (player.shootCooldown > 0) {
-            player.shootCooldown--;
-        }
-        if (keys.shoot) {
-            shootBullet();
+        if (player.shootCooldown > 0) player.shootCooldown--;
+        if (keys.shoot) shootBullet();
+
+        // 2. ボスのコア開閉タイマー
+        boss.coreTimer++;
+        if (boss.coreOpen) {
+            if (boss.coreTimer >= boss.coreOpenDuration) {
+                boss.coreOpen = false;
+                boss.coreTimer = 0;
+            }
+        } else {
+            if (boss.coreTimer >= boss.coreCloseDuration) {
+                boss.coreOpen = true;
+                boss.coreTimer = 0;
+            }
         }
 
-        // 5. 弾の移動と画面外削除
+        if (boss.flashTimer > 0) boss.flashTimer--;
+
+        // 3. ボスの攻撃AI・予兆処理
+        boss.attackTimer++;
+        if (boss.warningTimer > 0) {
+            // 予兆中カウントダウン
+            boss.warningTimer--;
+            if (boss.warningTimer === 0) {
+                // 予兆終了 ➔ 攻撃判定発生！
+                executeBossAttack(boss.nextAttackType);
+            }
+        } else if (boss.attackTimer >= boss.attackInterval) {
+            // 次の攻撃を予約し、予兆開始
+            boss.attackTimer = 0;
+            boss.nextAttackType = Math.floor(Math.random() * 3) + 1; // 1〜3のランダム選択
+            boss.warningTimer = boss.warningDuration; // 予兆スタート
+        }
+
+        // 4. プレイヤーの弾の移動とボスとの判定
+        const bossCoreRect = {
+            x: boss.x - 5,
+            y: boss.y + 80,
+            width: 45,
+            height: 60
+        };
+
         for (let i = bullets.length - 1; i >= 0; i--) {
             const b = bullets[i];
             b.x += b.vx;
 
-            // 画面外に出たら配列から削除（C言語でのfree/メモリ解放に相当）
+            if (checkCollision(b, boss)) {
+                if (boss.coreOpen && checkCollision(b, bossCoreRect)) {
+                    boss.hp -= 1;
+                    if (boss.hp < 0) boss.hp = 0;
+                    boss.flashTimer = 5;
+                }
+                bullets.splice(i, 1);
+                continue;
+            }
+
             if (b.x < 0 || b.x > canvas.width) {
                 bullets.splice(i, 1);
+            }
+        }
+
+        // 5. ボスの弾・衝撃波の移動処理
+        for (let i = bossBullets.length - 1; i >= 0; i--) {
+            const bb = bossBullets[i];
+            bb.x += bb.vx;
+            bb.y += bb.vy;
+
+            // 画面外（上下左右）に出たら消去
+            if (bb.x < -50 || bb.x > canvas.width + 50 || bb.y < -50 || bb.y > canvas.height + 50) {
+                bossBullets.splice(i, 1);
             }
         }
     }
@@ -162,16 +304,59 @@
         ctx.fillStyle = player.color;
         ctx.fillRect(player.x, player.y, player.width, player.height);
 
-        // 向きがわかるように「目（バイザー）」を描画（レトロSF感UP）
         ctx.fillStyle = '#ffffff';
         const eyeX = player.facing === 'right' ? player.x + 20 : player.x + 4;
         ctx.fillRect(eyeX, player.y + 10, 8, 8);
 
-        // 弾の描画
+        // プレイヤーの弾
         bullets.forEach(b => {
             ctx.fillStyle = b.color;
             ctx.fillRect(b.x, b.y, b.width, b.height);
         });
+
+        // --- ボスの描画 ---
+        ctx.fillStyle = boss.flashTimer > 0 ? '#ff4444' : '#444466';
+        ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
+
+        // 予兆演出（攻撃直前に目元が不気味に赤く点滅発光）
+        if (boss.warningTimer > 0) {
+            ctx.fillStyle = (Math.floor(boss.warningTimer / 4) % 2 === 0) ? '#ff0000' : '#ffff00';
+            ctx.fillRect(boss.x + 10, boss.y + 20, 120, 30); // 砲身・バイザーが点滅
+        } else {
+            ctx.fillStyle = '#222233';
+            ctx.fillRect(boss.x + 20, boss.y + 20, 100, 30);
+        }
+
+        // コア描画
+        if (boss.coreOpen) {
+            ctx.fillStyle = '#ff3300';
+            ctx.fillRect(boss.x - 5, boss.y + 80, 45, 60);
+            ctx.fillStyle = '#ffff00';
+            ctx.fillRect(boss.x + 5, boss.y + 90, 25, 40);
+        } else {
+            ctx.fillStyle = '#111122';
+            ctx.fillRect(boss.x - 5, boss.y + 80, 45, 60);
+            ctx.fillStyle = '#333344';
+            ctx.fillRect(boss.x - 5, boss.y + 105, 45, 8);
+        }
+
+        // ボスの弾・衝撃波の描画
+        bossBullets.forEach(bb => {
+            ctx.fillStyle = bb.color;
+            ctx.fillRect(bb.x, bb.y, bb.width, bb.height);
+        });
+
+        // ボスHPバー
+        ctx.fillStyle = '#fff';
+        ctx.font = '16px Courier New';
+        ctx.fillText('BOSS: LAST GUARDIAN', 450, 30);
+
+        ctx.strokeStyle = '#fff';
+        ctx.strokeRect(450, 40, 300, 16);
+
+        const hpWidth = (boss.hp / boss.maxHp) * 300;
+        ctx.fillStyle = boss.hp < 15 ? '#ff0000' : '#00ff66';
+        ctx.fillRect(450, 40, hpWidth, 16);
     }
 
     function gameLoop() {
@@ -182,5 +367,5 @@
 
     gameLoop();
 </script>
-</body>
+</body> d
 </html>
