@@ -30,64 +30,84 @@
 <canvas id="gameCanvas" width="800" height="600"></canvas>
 
 <script>
-    // キャンバスの取得
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    // キー入力状態を管理するオブジェクト（C言語の構造体やフラグ配列のようなもの）
+    // 床の位置情報（高さの共通定数）
+    const GROUND_Y = 500;
+
+    // キー入力状態の管理（jump を追加）
     const keys = {
         left: false,
-        right: false
+        right: false,
+        jump: false
     };
 
-    // プレイヤーのデータ構造（オブジェクト）
+    // プレイヤーのデータ構造（vy, gravity, jumpPower, isGrounded を追加）
     const player = {
         x: 100,
-        y: 500,
+        y: GROUND_Y,
         width: 32,
         height: 48,
         color: '#00ffcc',
-        speed: 5
+        speed: 5,
+        vy: 0,             // Y方向の速度（Velocity Y）
+        gravity: 0.8,      // 重力加速度
+        jumpPower: -13,    // ジャンプ力（上方向へ打ち出す速度。Canvas座標では上がマイナス）
+        isGrounded: false  // 地面に着地しているかどうか
     };
 
     // --- キーボードイベントリスナー ---
-    // キーが押されたとき
     window.addEventListener('keydown', (e) => {
         if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft')  keys.left = true;
         if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.right = true;
+        if (e.key === ' ' || e.key === 'ArrowUp')                    keys.jump = true;
     });
 
-    // キーが離されたとき
     window.addEventListener('keyup', (e) => {
         if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft')  keys.left = false;
         if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.right = false;
+        if (e.key === ' ' || e.key === 'ArrowUp')                    keys.jump = false;
     });
 
     // --- ゲームの更新処理 ---
     function update() {
-        // 移動処理
-        if (keys.left) {
-            player.x -= player.speed;
-        }
-        if (keys.right) {
-            player.x += player.speed;
-        }
+        // 1. 左右移動
+        if (keys.left)  player.x -= player.speed;
+        if (keys.right) player.x += player.speed;
 
-        // 画面外に出ていかないように移動範囲を制限（画面端の壁判定）
+        // 画面外に出ていかないように移動範囲を制限
         if (player.x < 0) player.x = 0;
         if (player.x + player.width > canvas.width) {
             player.x = canvas.width - player.width;
+        }
+
+        // 2. ジャンプ処理（接地している時だけジャンプ可能）
+        if (keys.jump && player.isGrounded) {
+            player.vy = player.jumpPower; // 上向きの初期速度を与える
+            player.isGrounded = false;   // 空中状態へ切り替え
+        }
+
+        // 3. 重力の適用とY座標の更新
+        player.vy += player.gravity; // 毎フレーム下向きの加速を加える
+        player.y += player.vy;       // 速度を位置に反映
+
+        // 4. 着地判定（地面の高さに到達したか）
+        if (player.y >= GROUND_Y) {
+            player.y = GROUND_Y;     // 地面の高さに固定
+            player.vy = 0;           // Y方向の速度をリセット
+            player.isGrounded = true;// 接地フラグを立てる
         }
     }
 
     // --- 描画処理 ---
     function draw() {
-        // 画面全体をクリア（前フレームの描画を消去）
+        // 画面クリア
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 床の描画
+        // 床の描画 (GROUND_Y + player.height の位置から下を描画)
         ctx.fillStyle = '#333';
-        ctx.fillRect(0, 548, canvas.width, 52);
+        ctx.fillRect(0, GROUND_Y + player.height, canvas.width, canvas.height - (GROUND_Y + player.height));
 
         // プレイヤーの描画
         ctx.fillStyle = player.color;
@@ -96,12 +116,11 @@
 
     // --- メインゲームループ ---
     function gameLoop() {
-        update(); // 位置や状態の更新
-        draw();   // 描画
-        requestAnimationFrame(gameLoop); // 次のフレームでgameLoopを再帰呼び出し
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
     }
 
-    // ゲームスタート
     gameLoop();
 </script>
 </body>
