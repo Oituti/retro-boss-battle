@@ -1,3 +1,6 @@
+// 🔗 Step 1 でコピーした GAS の URL をここに貼り付けてください
+const GAS_ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbxD22_-B9ckVUN7adpXQF46ZNRORoMQ7zkp-mOARoRSood9RReKvBqtfe3mIaObHFNjFA/exec';
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -18,6 +21,8 @@ let phaseMessageTimer = 0;
 let megalovaniaNoticeTimer = 0;
 let itemSpawnTimer = 0;
 
+let leaderboardData = []; // TOP 5 スコア配列
+
 const keys = {
     left: false,
     right: false,
@@ -30,6 +35,53 @@ let bullets = [];
 let bossBullets = [];
 let particles = [];
 let items = [];
+
+// DOM要素
+const overlay = document.getElementById('rankingInputOverlay');
+const finalTimeDisplay = document.getElementById('finalTimeDisplay');
+const nameInput = document.getElementById('playerNameInput');
+const submitBtn = document.getElementById('submitScoreBtn');
+
+// ランキング取得関数
+function fetchLeaderboard() {
+    if (!GAS_ENDPOINT_URL || GAS_ENDPOINT_URL === 'YOUR_GAS_WEB_APP_URL_HERE') return;
+    fetch(GAS_ENDPOINT_URL)
+        .then(res => res.json())
+        .then(data => {
+            if (Array.isArray(data)) {
+                leaderboardData = data;
+            }
+        })
+        .catch(() => {});
+}
+
+// スコア送信処理
+submitBtn.addEventListener('click', () => {
+    const name = nameInput.value.trim() || 'HERO';
+    submitBtn.disabled = true;
+    submitBtn.innerText = '送信中...';
+
+    fetch(GAS_ENDPOINT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ name: name, time: clearTime })
+    })
+        .then(res => res.json())
+        .then(data => {
+            overlay.classList.add('hidden');
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'ランキングに登録';
+            fetchLeaderboard(); // 最新のランキングを再取得
+        })
+        .catch(() => {
+            overlay.classList.add('hidden');
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'ランキングに登録';
+        });
+});
+
+// 初回ランキング読み込み
+fetchLeaderboard();
 
 function checkCollision(rect1, rect2) {
     return (
@@ -67,6 +119,7 @@ function spawnHealPotion(x, y) {
 }
 
 function initGame() {
+    overlay.classList.add('hidden');
     Sound.init();
     player.init(GROUND_Y);
     boss.init();
@@ -89,8 +142,10 @@ function initGame() {
     gameState = GAME_STATE.PLAYING;
 }
 
-// キーボード入力（キー判定の表記ゆれ防止強化）
 window.addEventListener('keydown', (e) => {
+    // オーバーレイ入力中はゲーム操作を無効化
+    if (!overlay.classList.contains('hidden')) return;
+
     Sound.init();
 
     const key = e.key;
@@ -99,7 +154,6 @@ window.addEventListener('keydown', (e) => {
     if (key === 'a' || key === 'A' || code === 'ArrowLeft')  keys.left = true;
     if (key === 'd' || key === 'D' || code === 'ArrowRight') keys.right = true;
 
-    // Spaceキーまたは上矢印キー
     if (key === ' ' || key === 'Spacebar' || code === 'Space' || code === 'ArrowUp') {
         if (!keys.jump) keys.jumpPressed = true;
         keys.jump = true;
@@ -201,6 +255,11 @@ function update() {
                     Sound.stopBGM();
                     Sound.playExplosion();
                     createExplosion(boss.x + boss.width / 2, boss.y + boss.height / 2, '#ff3300', 100);
+
+                    // クリア時名前入力オーバーレイを表示
+                    finalTimeDisplay.innerText = clearTime;
+                    nameInput.value = '';
+                    overlay.classList.remove('hidden');
                 }
             }
             bullets.splice(i, 1);
@@ -265,29 +324,41 @@ function draw() {
 
         ctx.fillStyle = '#00ffcc';
         ctx.font = 'bold 38px Courier New';
-        ctx.fillText('LAST GUARDIAN', canvas.width / 2, 110);
+        ctx.fillText('LAST GUARDIAN', canvas.width / 2, 80);
 
         ctx.fillStyle = '#ffaa00';
         ctx.font = '14px Courier New';
-        ctx.fillText('- 虚無の魔王と最後の勇者 -', canvas.width / 2, 140);
+        ctx.fillText('- 虚無の魔王と最後の勇者 -', canvas.width / 2, 110);
 
         ctx.fillStyle = '#cccccc';
-        ctx.font = '13px Courier New';
-        ctx.fillText('千年の封印は破られた。', canvas.width / 2, 190);
-        ctx.fillText('深淵より蘇りし魔王が、世界を漆黒の虚無へと呑み込もうとしている。', canvas.width / 2, 215);
-        ctx.fillText('聖なる剣を携えし最後の勇者よ、魔王のコアを撃ち抜き世界を救え！', canvas.width / 2, 240);
+        ctx.font = '12px Courier New';
+        ctx.fillText('千年の封印は破られた。魔王のコアを撃ち抜き世界を救え！', canvas.width / 2, 145);
 
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 18px Courier New';
-        ctx.fillText('>> PRESS SPACE TO START <<', canvas.width / 2, 300);
+        ctx.font = 'bold 16px Courier New';
+        ctx.fillText('>> PRESS SPACE TO START <<', canvas.width / 2, 185);
+
+        // 🏆 オンラインランキング TOP 5 表示
+        ctx.fillStyle = '#ffff00';
+        ctx.font = 'bold 16px Courier New';
+        ctx.fillText('=== ONLINE LEADERBOARD (TOP 5) ===', canvas.width / 2, 230);
+
+        if (leaderboardData.length === 0) {
+            ctx.fillStyle = '#8888aa';
+            ctx.font = '13px Courier New';
+            ctx.fillText('Loading rankings...', canvas.width / 2, 265);
+        } else {
+            leaderboardData.forEach((score, idx) => {
+                ctx.fillStyle = idx === 0 ? '#ffcc00' : (idx === 1 ? '#cccccc' : (idx === 2 ? '#cc6600' : '#ffffff'));
+                ctx.font = '14px Courier New';
+                ctx.fillText(`${idx + 1}. ${score.name.padEnd(10, ' ')} : ${score.time}s`, canvas.width / 2, 265 + idx * 25);
+            });
+        }
 
         ctx.fillStyle = '#8888aa';
-        ctx.font = '13px Courier New';
-        ctx.fillText('--- CONTROLS ---', canvas.width / 2, 380);
-        ctx.fillText('移動 : A / D  または  ← / →', canvas.width / 2, 405);
-        ctx.fillText('ジャンプ : Space  または  ↑ (空中2段ジャンプ可)', canvas.width / 2, 430);
-        ctx.fillText('聖剣波(攻撃) : J  または  X', canvas.width / 2, 455);
-        ctx.fillText('リトライ : R', canvas.width / 2, 480);
+        ctx.font = '12px Courier New';
+        ctx.fillText('--- CONTROLS ---', canvas.width / 2, 420);
+        ctx.fillText('移動: A / D | ジャンプ: Space | 攻撃: J / X | リトライ: R', canvas.width / 2, 445);
         ctx.textAlign = 'left';
         return;
     }
@@ -383,16 +454,27 @@ function draw() {
         ctx.textAlign = 'center';
         ctx.fillStyle = '#00ffcc';
         ctx.font = 'bold 36px Courier New';
-        ctx.fillText('VICTORY!', canvas.width / 2, 190);
+        ctx.fillText('VICTORY!', canvas.width / 2, 160);
 
         ctx.fillStyle = '#ffff00';
         ctx.font = '16px Courier New';
-        ctx.fillText('魔王は滅び、世界に再び光が戻った！', canvas.width / 2, 235);
-        ctx.fillText(`撃破タイム: ${clearTime} 秒`, canvas.width / 2, 275);
+        ctx.fillText('魔王は滅び、世界に再び光が戻った！', canvas.width / 2, 200);
+        ctx.fillText(`撃破タイム: ${clearTime} 秒`, canvas.width / 2, 230);
+
+        // クリア画面にもリアルタイムTOP 5ランキングを表示
+        ctx.fillStyle = '#00ffcc';
+        ctx.font = 'bold 15px Courier New';
+        ctx.fillText('=== TOP 5 LEADERBOARD ===', canvas.width / 2, 280);
+
+        leaderboardData.forEach((score, idx) => {
+            ctx.fillStyle = idx === 0 ? '#ffcc00' : '#ffffff';
+            ctx.font = '13px Courier New';
+            ctx.fillText(`${idx + 1}. ${score.name.padEnd(10, ' ')} : ${score.time}s`, canvas.width / 2, 305 + idx * 22);
+        });
 
         ctx.fillStyle = '#ffffff';
         ctx.font = '18px Courier New';
-        ctx.fillText('>> PRESS R TO PLAY AGAIN <<', canvas.width / 2, 350);
+        ctx.fillText('>> PRESS R TO PLAY AGAIN <<', canvas.width / 2, 450);
         ctx.textAlign = 'left';
     }
 }

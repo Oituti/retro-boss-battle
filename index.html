@@ -8,9 +8,27 @@
 </head>
 <body>
 
-<canvas id="gameCanvas" width="800" height="600"></canvas>
+<div class="game-container">
+    <div class="canvas-wrapper">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
 
-<!-- 読み込み順序：依存関係順 -->
+        <!-- クリア時の名前登録用オーバーレイUI -->
+        <div id="rankingInputOverlay" class="hidden">
+            <div class="overlay-content">
+                <h2>🎉 RECORD HIGH SCORE! 🎉</h2>
+                <p>クリアタイム: <span id="finalTimeDisplay">0.00</span> 秒</p>
+                <input type="text" id="playerNameInput" maxlength="10" placeholder="名前を入力 (10文字以内)">
+                <button id="submitScoreBtn">ランキングに登録</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BGMクレジット表記 -->
+    <div class="credit-box">
+        <p>🎵 BGM : OtoLogic / RUA-Free-Box</p>
+    </div>
+</div>
+
 <script src="js/sound.js"></script>
 <script src="js/player.js"></script>
 <script src="js/boss.js"></script>

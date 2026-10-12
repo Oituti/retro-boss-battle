@@ -69,7 +69,6 @@ const Sound = {
         this.stopBGM();
         if (this.isMuted) return;
 
-        // 30%の確率で MEGALOVANIA (audio/megalovania.mp3) に決定！
         this.isMegalovania = Math.random() < 0.3;
         const bgmPath = this.isMegalovania ? 'audio/megalovania.mp3' : 'audio/bgm.mp3';
 

@@ -35,7 +35,6 @@ const boss = {
         this.flashTimer = 0;
         this.attackTimer = 0;
 
-        // 💀 メガロバニア時は攻撃頻度をさらに激化！（70フレーム）
         this.attackInterval = Sound.isMegalovania ? 70 : 130;
         this.warningTimer = 0;
         this.warningDuration = Sound.isMegalovania ? 25 : 40;
@@ -48,11 +47,9 @@ const boss = {
     update(playerObj, bossBullets, groundY) {
         if (this.hp <= this.maxHp / 2) {
             this.isPhase2 = true;
-            // 💀 メガロバニア時第2フェーズ：超高速攻撃（40フレーム＝約0.66秒間隔）
             this.attackInterval = Sound.isMegalovania ? 40 : 80;
         }
 
-        // 💀 メガロバニアの時は地上に降りてこない（isGroundedStateを常にfalseに固定）
         if (Sound.isMegalovania) {
             this.isGroundedState = false;
         } else {
@@ -66,7 +63,6 @@ const boss = {
         const moveSpeed = Sound.isMegalovania ? (this.isPhase2 ? 0.08 : 0.06) : (this.isPhase2 ? 0.05 : 0.035);
         this.moveAngle += moveSpeed;
 
-        // 目標Y座標の計算（メガロバニア時は上空でふわふわ浮遊固定）
         const targetY = this.isGroundedState
             ? (groundY + playerObj.height - this.height + 48)
             : (this.baseY + Math.sin(this.moveAngle * 2) * 45);
@@ -113,7 +109,6 @@ const boss = {
         const by = this.y + 110;
 
         if (this.nextAttackType === 1) {
-            // 狙い撃ち高速弾
             const dx = (playerObj.x + playerObj.width / 2) - bx;
             const dy = (playerObj.y + playerObj.height / 2) - by;
             const angle = Math.atan2(dy, dx);
@@ -129,7 +124,6 @@ const boss = {
                 color: '#ff00ff'
             });
         } else if (this.nextAttackType === 2) {
-            // 地上衝撃波
             const speed = Sound.isMegalovania ? (this.isPhase2 ? -11 : -9) : (this.isPhase2 ? -8.5 : -6.5);
             bossBullets.push({
                 x: this.x,
@@ -141,12 +135,11 @@ const boss = {
                 color: '#ff3300'
             });
         } else if (this.nextAttackType === 3) {
-            // 💀 拡散弾幕強化（メガロバニア時：フェーズ1で5方向、フェーズ2で7方向の扇状弾幕！）
             let angles;
             if (Sound.isMegalovania) {
                 angles = this.isPhase2
-                    ? [-0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75]  // 7方向
-                    : [-0.6, -0.3, 0, 0.3, 0.6];               // 5方向
+                    ? [-0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75]
+                    : [-0.6, -0.3, 0, 0.3, 0.6];
             } else {
                 angles = this.isPhase2
                     ? [-0.6, -0.3, 0, 0.3, 0.6]

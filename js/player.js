@@ -27,7 +27,6 @@ const player = {
         this.hp = this.maxHp;
         this.invincibleTimer = 0;
 
-        // 💀 メガロバニア時は勇者もハイテンポ化（スピード＆連射力UP）
         if (Sound.isMegalovania) {
             this.speed = 8.0;
         } else {
@@ -92,7 +91,6 @@ const player = {
             color: '#ffff00'
         });
 
-        // 💀 メガロバニア時は連射速度がアップ！
         this.shootCooldown = Sound.isMegalovania ? 6 : 10;
         Sound.playShoot();
     },
